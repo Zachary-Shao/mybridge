@@ -14,8 +14,11 @@ MyBridge 是一个面向个人用户的轻量级 Windows → Mac 局域网文件
 ## 运行要求
 
 - Windows 10+ 或 macOS 12+
-- Node.js 20+
 - 两台电脑在同一局域网
+
+普通用户使用安装包时不需要安装 Node.js；安装包已包含 MyBridge 运行所需环境。
+
+开发运行需要 Node.js 20+。
 
 ## 开发运行
 
