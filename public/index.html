@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#131518">
-    <title>MyBridge / Personal File Bridge</title>
+    <title>MyBridge / Auto Folder Mirror</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -17,7 +17,7 @@
           <span>MyBridge</span>
         </a>
         <div class="topbar-meta">
-          <span class="topbar-label">PRIVATE LAN / V0.2</span>
+          <span class="topbar-label">PRIVATE LAN / V0.3</span>
           <span class="topbar-divider"></span>
           <span id="clock" class="mono">--:--:--</span>
         </div>
@@ -26,9 +26,9 @@
       <main>
         <section class="hero-grid">
           <div class="hero-copy">
-            <div class="eyebrow">PERSONAL FILE BRIDGE</div>
-            <h1>让两台电脑，<em>像同一台。</em></h1>
-            <p>Windows 发生的变化，安静地抵达 Mac。一次配好，之后只管工作。</p>
+            <div class="eyebrow">AUTO FOLDER MIRROR</div>
+            <h1>让项目，<em>自动出现在 Mac。</em></h1>
+            <p>Windows 上的工作目录一有变化，最新文件就会安静抵达 Mac，交给 Codex 或 LLM 随时读取。</p>
             <div class="hero-footnote"><span class="dot dot-lime"></span> 数据只在你的局域网里流动</div>
           </div>
           <article id="connection-card" class="connection-card" aria-live="polite">
@@ -41,31 +41,31 @@
           </article>
         </section>
 
-        <div class="section-heading"><span>01</span><h2>链路总览</h2><div></div><small>LIVE OVERVIEW</small></div>
-        <section class="overview-grid">
-          <article class="panel path-panel source-panel">
-            <div class="panel-head"><div><span class="panel-index">A / SOURCE</span><h3>Windows 文件源</h3></div><span id="source-state" class="state-badge">未配置</span></div>
-            <div class="path-display"><span class="path-icon">↗</span><span id="source-path">还没有选择 Source Folder</span></div>
-            <p class="panel-note">监听新增和更新 · 不同步删除</p>
-          </article>
-          <div class="flow-arrow" aria-hidden="true"><span>→</span><small>LAN</small></div>
-          <article class="panel path-panel destination-panel">
-            <div class="panel-head"><div><span class="panel-index">B / DESTINATION</span><h3>Mac 项目目录</h3></div><span id="destination-state" class="state-badge">未配置</span></div>
-            <div class="path-display"><span class="path-icon">↙</span><span id="destination-path">还没有选择 Destination Folder</span></div>
-            <p class="panel-note">文件完成后原子替换 · 不会留下半文件</p>
-          </article>
+        <div class="section-heading"><span>01</span><h2>你的同步文件夹</h2><div></div><small>FOLDER MIRRORS</small></div>
+        <section class="panel mirrors-panel">
+          <div class="panel-head">
+            <div><span class="panel-index">WINDOWS → MAC</span><h3>项目文件夹会自动保持最新</h3></div>
+            <button id="add-mirror-button" class="button button-primary" type="button">＋ 添加文件夹</button>
+          </div>
+          <div id="mirror-list" class="mirror-list"><div class="empty-state"><span class="empty-orbit"></span><p>还没有同步文件夹</p><small>点击“添加文件夹”，选择一个 Windows 项目目录</small></div></div>
+          <p class="panel-note mirror-note">只同步新增和修改；Windows 删除文件不会删除 Mac 上的副本。</p>
         </section>
 
-        <div class="section-heading"><span>02</span><h2>设备与配置</h2><div></div><small>PAIR / CONFIGURE</small></div>
+        <div class="section-heading"><span>02</span><h2>设备与设置</h2><div></div><small>PAIR / CONFIGURE</small></div>
         <section class="control-grid">
           <article class="panel settings-panel">
-            <div class="panel-head"><div><span class="panel-index">LOCAL SETUP</span><h3>告诉 MyBridge 去哪里工作</h3></div><span class="gear" aria-hidden="true">✳</span></div>
+            <div class="panel-head"><div><span class="panel-index">LOCAL SETUP</span><h3>MyBridge 认识这台电脑</h3></div><span class="gear" aria-hidden="true">✳</span></div>
             <form id="settings-form">
               <label>设备名称<input id="device-name" name="deviceName" autocomplete="off" placeholder="例如：Zachary 的 Windows"></label>
-              <label>Source Folder <span class="label-hint">Windows</span><div class="folder-input"><input id="source-folder" name="sourceFolder" autocomplete="off" placeholder="C:\\Users\\你\\通达信\\data"><button id="pick-source" class="folder-button native-only" type="button">选择</button></div></label>
-              <label>Destination Folder <span class="label-hint">Mac</span><div class="folder-input"><input id="destination-folder" name="destinationFolder" autocomplete="off" placeholder="/Users/你/Projects/market-data"><button id="pick-destination" class="folder-button native-only" type="button">选择</button></div></label>
               <label id="auto-launch-row" class="toggle-row native-only"><input id="auto-launch" type="checkbox"><span><strong>开机后自动运行</strong><small>关闭窗口后，MyBridge 仍会在后台保持同步</small></span><i></i></label>
-              <div class="form-actions"><button class="button button-primary" type="submit">保存本机配置 <span>↗</span></button><span id="settings-message" class="form-message" role="status"></span></div>
+              <details class="advanced-settings inline-advanced">
+                <summary>高级设置 <span>目录、忽略规则和旧版配置</span></summary>
+                <label>Mac MyBridge 根目录<input id="mybridge-root" autocomplete="off" placeholder="/Users/你/MyBridge"><small class="field-help">Mac 会在这里自动创建每个镜像文件夹。</small></label>
+                <label>忽略规则 <span class="label-hint">每行一条</span><textarea id="ignore-rules" rows="5" placeholder="例如：*.bak&#10;private/**"></textarea><small class="field-help">默认已忽略 .git、node_modules、cache、log 和临时文件。</small></label>
+                <label>旧版 Source Folder <span class="label-hint">兼容 V0.2</span><input id="source-folder" autocomplete="off" placeholder="仅迁移旧配置时使用"></label>
+                <label>旧版 Destination Folder <span class="label-hint">兼容 V0.2</span><input id="destination-folder" autocomplete="off" placeholder="仅迁移旧配置时使用"></label>
+              </details>
+              <div class="form-actions"><button class="button button-primary" type="submit">保存设置 <span>↗</span></button><span id="settings-message" class="form-message" role="status"></span></div>
             </form>
           </article>
 
@@ -73,9 +73,9 @@
             <div class="panel-head"><div><span class="panel-index">LAN RADAR</span><h3>附近的设备</h3></div><button id="refresh-button" class="icon-button" type="button" aria-label="刷新设备">↻</button></div>
             <div id="device-list" class="device-list"><div class="empty-state"><span class="empty-orbit"></span><p>正在扫描局域网设备…</p><small>两台电脑需要连接到同一个网络</small></div></div>
             <details class="advanced-settings">
-              <summary>高级设置 <span>仅在自动发现失败时使用</span></summary>
+              <summary>手动连接 <span>仅在自动发现失败时使用</span></summary>
               <div class="manual-pair">
-                <div class="manual-label">手动连接另一台设备</div>
+                <div class="manual-label">输入对方设备地址</div>
                 <div class="manual-row"><input id="manual-address" placeholder="http://192.168.1.20:39875" autocomplete="off"><button id="manual-pair-button" class="button button-secondary" type="button">连接</button></div>
               </div>
               <div class="advanced-note">当前设备的本地服务端口：<span id="advanced-port" class="mono">—</span></div>
@@ -86,12 +86,23 @@
         <div class="section-heading"><span>03</span><h2>最近活动</h2><div></div><button id="resync-button" class="text-button" type="button">立即重新扫描 ↗</button></div>
         <section class="panel activity-panel">
           <div class="activity-header"><span>状态</span><span>文件 / 事件</span><span>时间</span></div>
-          <div id="activity-list"><div class="empty-activity">完成配对后，这里会显示每一次文件抵达的记录。</div></div>
+          <div id="activity-list"><div class="empty-activity">添加文件夹后，这里会显示每一次文件抵达的记录。</div></div>
         </section>
       </main>
 
       <footer class="footer"><span>MYBRIDGE / LOCAL ONLY</span><span>没有账号 · 没有云 · 只有你的两台设备</span></footer>
     </div>
+
+    <dialog id="mirror-dialog" class="mirror-dialog">
+      <form id="mirror-form" method="dialog">
+        <div class="dialog-kicker">NEW FOLDER MIRROR</div>
+        <h2>添加一个项目文件夹</h2>
+        <p>选择 Windows 上的完整项目目录，MyBridge 会在 Mac 的 MyBridge 根目录下自动创建对应镜像。</p>
+        <label>项目名称<input id="mirror-name" autocomplete="off" placeholder="例如：My Project"></label>
+        <label>Windows Project Folder<div class="folder-input"><input id="mirror-source" autocomplete="off" placeholder="选择一个目录" required><button id="pick-mirror-source" class="folder-button native-only" type="button">选择</button></div></label>
+        <div class="dialog-actions"><button id="cancel-mirror-button" class="button button-secondary" type="button">取消</button><button class="button button-primary" type="submit">开始同步 ↗</button></div>
+      </form>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/app.js"></script>
   </body>

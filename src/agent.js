@@ -153,6 +153,7 @@ export class Agent {
     await this.syncEngine.stop();
     await this.discovery.stop();
     await this.httpServer.stop();
+    this.store.flush();
   }
 
   getPublicState() {
@@ -443,8 +444,7 @@ export class Agent {
     this.store.update({ mirrors: this.store.get().mirrors.map((item) => item.id === mirror.id ? { ...item, enabled } : item) });
     if (enabled) {
       const updated = this.findMirror(mirror.id);
-      const engine = await this.startMirrorEngine(updated, { initialScan: true });
-      if (engine && !this.globalPaused) await engine.syncAll();
+      await this.startMirrorEngine(updated, { initialScan: true });
       this.handleMirrorStatus(mirror.id, { status: "waiting" });
     } else {
       await this.stopMirrorEngine(mirror.id);

@@ -1,14 +1,15 @@
 # MyBridge
 
-MyBridge 是一个面向个人用户的轻量级 Windows → Mac 局域网文件同步桌面应用。
+MyBridge 是一个面向个人用户的轻量级 Windows → Mac 局域网项目文件夹镜像桌面应用。
 
-桌面版使用 Electron 壳启动本地 Agent：两台电脑各运行一个 MyBridge，源端监听 Source Folder，目标端把文件写入 Destination Folder。没有账号、云服务器、数据库或公网传输。
+桌面版使用 Electron 壳启动本地 Agent：Windows 选择一个完整 Project Folder，Mac 自动在 `~/MyBridge/` 下创建同名镜像。没有账号、云服务器、数据库或公网传输。
 
 ## 当前状态
 
 - 已实现的核心方向：跨平台 Agent、局域网 UDP 发现、HTTP 配对、文件流式传输、临时文件原子替换、递归监听、初始全量扫描、本地活动记录。
 - V0.1 不同步删除，只同步新增和更新；不做双向同步、冲突解决或公网传输。
 - V0.2 已增加 Electron 桌面壳、系统托盘、原生目录选择、开机启动、暂停/恢复和断线后自动补同步。
+- V0.3 已增加多个 Folder Mirror、Mac 自动生成镜像目录、Ignore Rules、重名目录处理、Finder 打开和重连后全量补同步。
 - 当前环境没有 Rust/Tauri，因此暂不采用 Tauri；同步核心已与桌面壳分离，未来可以替换壳而不重写同步协议。
 
 ## 运行要求
@@ -54,12 +55,18 @@ npm run dist
 ## 两台设备配置
 
 1. 在 Mac 和 Windows 分别安装并打开 MyBridge。
-2. 在 Mac 选择 Destination Folder，在 Windows 选择 Source Folder。
-3. 在 Windows 的附近设备列表中点击 Mac 的“连接”。
-4. 将文件放入 Windows Source Folder；文件出现或更新后，Mac Destination Folder 会自动收到同样的相对路径。
-5. 关闭窗口后 MyBridge 会留在系统托盘继续工作；电脑重启后会自动启动。
+2. 在 Windows 的附近设备列表中点击 Mac 的“连接”。
+3. 点击“添加文件夹”，选择完整的 Windows Project Folder，可修改显示名称，然后点击“开始同步”。
+4. Mac 会自动创建 `~/MyBridge/<Mirror Name>/`；已有文件会先补齐，之后新增和修改会自动同步，目录结构和相对路径保持一致。
+5. Mac 镜像卡片提供“在 Finder 中打开”；关闭窗口后 MyBridge 会留在系统托盘继续工作，电脑重启后会自动启动。
 
-如果 UDP 发现被防火墙拦截，可以在 Advanced Settings 中手动填写对方地址进行配对。网络或对方电脑暂时不可用时，源端保留失败状态；对方恢复后会自动重新发现并补同步。
+如果 UDP 发现被防火墙拦截，可以在高级设置中手动填写对方地址进行配对。网络或对方电脑暂时不可用时，源端保留 Mirror 配置；对方恢复后会自动重新注册、重扫并补同步。
+
+## Ignore Rules
+
+默认忽略以下明显不需要同步的内容：`.git`、`node_modules`、`.DS_Store`、`cache`、`.cache`、`log`、`logs`、`*.log`、`*.tmp`、`*.temp`、`*.part`、编辑器交换文件和 MyBridge 临时文件。
+
+在“高级设置”中可以按行增加规则，例如 `*.bak` 或 `private/**`。规则只影响新增/更新扫描，不会删除 Mac 上已经存在的文件。
 
 ## 配置位置
 
@@ -68,6 +75,14 @@ npm run dist
 
 测试或开发时可以通过 `--data-dir <path>` 使用隔离配置目录。
 
-## V0.1/V0.2 边界
+## V0.1/V0.2/V0.3 边界
 
-当前只支持 Windows → Mac 单向新增和更新同步。删除同步、双向同步、冲突解决、公网传输、云存储、登录注册和手机端均未实现。
+当前只支持 Windows → Mac 多 Folder Mirror 的新增和更新同步。Windows 删除文件不会删除 Mac 副本；双向同步、冲突解决、公网传输、云存储、登录注册和手机端均未实现。
+
+## 测试覆盖
+
+```bash
+npm test
+```
+
+当前测试覆盖双 Agent 配对、Folder Mirror 初始扫描、嵌套目录、中文文件名、Ignore Rules、空目录、同名目录、移除不删文件、断线重连、1,000 个小文件和 500 MB 文件流式传输。

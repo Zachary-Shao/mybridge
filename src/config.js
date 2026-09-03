@@ -50,6 +50,7 @@ function normalizeMirror(raw) {
   return {
     ...mirror,
     name: String(raw.name || mirror.name).trim() || mirror.name,
+    sourceDeviceName: String(raw.sourceDeviceName || ""),
     targetFolderName: sanitizeFolderName(raw.targetFolderName || mirror.targetFolderName),
     enabled: raw.enabled !== false
   };
@@ -81,6 +82,9 @@ export class ConfigStore {
     this.filePath = path.join(this.dataDir, "config.json");
     this.defaults = defaultConfig(options);
     this.config = null;
+    this.activitySaveTimer = null;
+    this.lastActivitySaveAt = 0;
+    this.activitySaveDelayMs = Number(options.activitySaveDelayMs ?? 100);
   }
 
   load() {
@@ -121,8 +125,27 @@ export class ConfigStore {
     };
     this.config = this.get();
     this.config.activity = [activity, ...this.config.activity].slice(0, 50);
-    this.save();
+    this.scheduleActivitySave();
     return activity;
+  }
+
+  scheduleActivitySave() {
+    const elapsed = Date.now() - this.lastActivitySaveAt;
+    if (elapsed >= this.activitySaveDelayMs) {
+      this.save();
+      return;
+    }
+    if (this.activitySaveTimer) return;
+    this.activitySaveTimer = setTimeout(() => {
+      this.activitySaveTimer = null;
+      this.save();
+    }, this.activitySaveDelayMs - elapsed);
+  }
+
+  flush() {
+    if (this.activitySaveTimer) clearTimeout(this.activitySaveTimer);
+    this.activitySaveTimer = null;
+    if (this.config) this.save();
   }
 
   save() {
@@ -130,6 +153,7 @@ export class ConfigStore {
     const temporaryPath = `${this.filePath}.tmp`;
     fs.writeFileSync(temporaryPath, `${JSON.stringify(this.config, null, 2)}\n`, "utf8");
     fs.renameSync(temporaryPath, this.filePath);
+    this.lastActivitySaveAt = Date.now();
   }
 }
 

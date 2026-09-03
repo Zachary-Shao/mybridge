@@ -1,6 +1,6 @@
 {
   "name": "mybridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "main": "src/electron-main.js",
   "author": "MyBridge",
@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/cli.js",
-    "test": "node --test",
+    "test": "node scripts/run-tests.js",
     "desktop": "electron .",
     "desktop:mac": "electron .",
     "dist": "electron-builder"

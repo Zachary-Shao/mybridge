@@ -35,6 +35,7 @@ async function listFiles(rootFolder, { ignoreRules = DEFAULT_IGNORE_RULES } = {}
 
 async function waitForStableFile(filePath, stabilityMs, maxChecks = 5) {
   let previous = await fsp.stat(filePath);
+  if (Date.now() - previous.mtimeMs >= stabilityMs) return previous;
   for (let check = 0; check < maxChecks; check += 1) {
     await sleep(stabilityMs);
     const current = await fsp.stat(filePath);

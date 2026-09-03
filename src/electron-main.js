@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, Tray, ipcMain, powerMonitor } from "electron";
+import { app, BrowserWindow, dialog, Menu, nativeImage, shell, Tray, ipcMain, powerMonitor } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Agent } from "./agent.js";
@@ -103,6 +103,11 @@ ipcMain.handle("pick-folder", async (_event, currentPath) => {
     properties: ["openDirectory", "createDirectory"]
   });
   return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle("open-path", async (_event, targetPath) => {
+  if (typeof targetPath !== "string" || !path.isAbsolute(targetPath)) throw new Error("Only local absolute paths can be opened");
+  return shell.openPath(path.resolve(targetPath));
 });
 
 ipcMain.handle("get-auto-launch", () => readAutoLaunch(app));

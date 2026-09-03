@@ -114,6 +114,7 @@ export class RuntimeState {
       id: mirror.id,
       name: mirror.name,
       sourceDeviceId: mirror.sourceDeviceId,
+      sourceDeviceName: mirror.sourceDeviceName || "",
       sourcePath: mirror.sourcePath,
       targetDeviceId: mirror.targetDeviceId,
       targetDeviceName: mirror.targetDeviceName,

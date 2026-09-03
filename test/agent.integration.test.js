@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Agent } from "../src/agent.js";
+import { listFiles } from "../src/sync-engine.js";
 
 async function eventually(check, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
@@ -176,6 +177,117 @@ test("folder mirror reconnects and rescans after Mac restarts", async () => {
     await source.stop();
     await restartedDestination?.stop();
     await destination.stop().catch(() => {});
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("creates distinct empty mirrors and never deletes files when a mirror is removed", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mybridge-mirror-remove-"));
+  const sourceFolder = path.join(root, "source");
+  const mirrorRoot = path.join(root, "MyBridge");
+  const sourceData = path.join(root, "source-data");
+  const destinationData = path.join(root, "destination-data");
+  await fs.mkdir(sourceFolder, { recursive: true });
+  const destination = new Agent({ dataDir: destinationData, mybridgeRoot: mirrorRoot, deviceName: "Mac empty", httpPort: 0, enableDiscovery: false });
+  const source = new Agent({ dataDir: sourceData, deviceName: "Windows empty", httpPort: 0, enableDiscovery: false });
+  await destination.start();
+  await source.start();
+  try {
+    await source.pairWithRemote({ deviceId: destination.store.get().deviceId, deviceName: "Mac empty", baseUrl: `http://127.0.0.1:${destination.port}` });
+    const first = await source.addMirror({ sourcePath: sourceFolder, name: "Project" });
+    const second = await source.addMirror({ sourcePath: sourceFolder, name: "Project" });
+    assert.deepEqual(first.mirrors.map((mirror) => mirror.targetFolderName), ["Project"]);
+    assert.deepEqual(second.mirrors.map((mirror) => mirror.targetFolderName), ["Project", "Project (2)"]);
+    await fs.access(path.join(mirrorRoot, "Project"));
+    await fs.access(path.join(mirrorRoot, "Project (2)"));
+
+    await fs.writeFile(path.join(sourceFolder, "kept.txt"), "keep this file");
+    await eventually(async () => (await fs.readFile(path.join(mirrorRoot, "Project", "kept.txt"), "utf8").catch(() => "")) === "keep this file");
+    await source.removeMirror(first.mirrors[0].id);
+    assert.equal(await fs.readFile(path.join(mirrorRoot, "Project", "kept.txt"), "utf8"), "keep this file");
+    assert.equal((await getJson(`http://127.0.0.1:${destination.port}/api/state`)).mirrors.some((mirror) => mirror.targetFolderName === "Project"), false);
+  } finally {
+    await source.stop();
+    await destination.stop();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("pauses one folder mirror without affecting another and resumes with a rescan", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mybridge-mirror-pause-"));
+  const sourceOne = path.join(root, "source-one");
+  const sourceTwo = path.join(root, "source-two");
+  const mirrorRoot = path.join(root, "MyBridge");
+  const sourceData = path.join(root, "source-data");
+  const destinationData = path.join(root, "destination-data");
+  await fs.mkdir(sourceOne, { recursive: true });
+  await fs.mkdir(sourceTwo, { recursive: true });
+  const destination = new Agent({ dataDir: destinationData, mybridgeRoot: mirrorRoot, deviceName: "Mac pause", httpPort: 0, enableDiscovery: false });
+  const source = new Agent({ dataDir: sourceData, deviceName: "Windows pause", httpPort: 0, enableDiscovery: false });
+  await destination.start();
+  await source.start();
+  try {
+    await source.pairWithRemote({ deviceId: destination.store.get().deviceId, deviceName: "Mac pause", baseUrl: `http://127.0.0.1:${destination.port}` });
+    const first = await source.addMirror({ sourcePath: sourceOne, name: "Paused Project" });
+    const second = await source.addMirror({ sourcePath: sourceTwo, name: "Live Project" });
+    await source.setMirrorPaused(first.mirrors[0].id, true);
+    await fs.writeFile(path.join(sourceOne, "held.txt"), "held");
+    await fs.writeFile(path.join(sourceTwo, "live.txt"), "live");
+    await eventually(async () => (await fs.readFile(path.join(mirrorRoot, "Live Project", "live.txt"), "utf8").catch(() => "")) === "live");
+    assert.equal(await fs.access(path.join(mirrorRoot, "Paused Project", "held.txt")).then(() => true).catch(() => false), false);
+
+    await source.setMirrorPaused(first.mirrors[0].id, false);
+    await eventually(async () => (await fs.readFile(path.join(mirrorRoot, "Paused Project", "held.txt"), "utf8").catch(() => "")) === "held");
+    assert.equal((await getJson(`http://127.0.0.1:${source.port}/api/state`)).mirrors.find((mirror) => mirror.name === "Paused Project").enabled, true);
+    assert.equal(second.mirrors[1].name, "Live Project");
+  } finally {
+    await source.stop();
+    await destination.stop();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncs 1,000 small files and a 500 MB file through a folder mirror", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mybridge-mirror-volume-"));
+  const sourceFolder = path.join(root, "source");
+  const mirrorRoot = path.join(root, "MyBridge");
+  const sourceData = path.join(root, "source-data");
+  const destinationData = path.join(root, "destination-data");
+  await fs.mkdir(path.join(sourceFolder, "batch"), { recursive: true });
+  for (let index = 0; index < 1_000; index += 1) {
+    await fs.writeFile(path.join(sourceFolder, "batch", `file-${String(index).padStart(4, "0")}.txt`), `file ${index}\n`);
+  }
+  const largePath = path.join(sourceFolder, "large.bin");
+  const handle = await fs.open(largePath, "w");
+  const chunk = Buffer.alloc(1024 * 1024, 0x5a);
+  try {
+    for (let index = 0; index < 500; index += 1) await handle.write(chunk);
+  } finally {
+    await handle.close();
+  }
+
+  const destination = new Agent({ dataDir: destinationData, mybridgeRoot: mirrorRoot, deviceName: "Mac volume", httpPort: 0, enableDiscovery: false });
+  const source = new Agent({ dataDir: sourceData, deviceName: "Windows volume", httpPort: 0, enableDiscovery: false });
+  await destination.start();
+  await source.start();
+  try {
+    await source.pairWithRemote({ deviceId: destination.store.get().deviceId, deviceName: "Mac volume", baseUrl: `http://127.0.0.1:${destination.port}` });
+    await source.addMirror({ sourcePath: sourceFolder, name: "Volume Project" });
+    const targetFolder = path.join(mirrorRoot, "Volume Project");
+    await eventually(async () => (await fs.stat(path.join(targetFolder, "large.bin")).catch(() => null))?.size === 500 * 1024 * 1024, 30_000);
+    assert.equal((await listFiles(targetFolder)).length, 1_001);
+    assert.equal(await fs.readFile(path.join(targetFolder, "batch", "file-0999.txt"), "utf8"), "file 999\n");
+    const targetHandle = await fs.open(path.join(targetFolder, "large.bin"), "r");
+    const sample = Buffer.alloc(1024);
+    try {
+      await targetHandle.read(sample, 0, sample.length, 123 * 1024 * 1024);
+    } finally {
+      await targetHandle.close();
+    }
+    assert.ok(sample.every((byte) => byte === 0x5a));
+  } finally {
+    await source.stop();
+    await destination.stop();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
