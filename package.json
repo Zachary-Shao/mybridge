@@ -12,8 +12,8 @@
     "desktop": "electron .",
     "desktop:mac": "electron .",
     "dist": "electron-builder",
-    "build:win:x64": "electron-builder --win --x64",
-    "build:mac:arm64": "electron-builder --mac --arm64"
+    "build:win:x64": "electron-builder --win --x64 --publish never",
+    "build:mac:arm64": "electron-builder --mac --arm64 --publish never"
   },
   "engines": {
     "node": ">=20"
