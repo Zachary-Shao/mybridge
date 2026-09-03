@@ -1,4 +1,3 @@
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 export const DEFAULT_IGNORE_RULES = Object.freeze([
@@ -102,7 +101,7 @@ export function createMirror({ id = randomUUID(), name, sourceDeviceId, sourcePa
     id: String(id),
     name: mirrorName,
     sourceDeviceId: String(sourceDeviceId || ""),
-    sourcePath: path.resolve(String(sourcePath || ".")),
+    sourcePath: String(sourcePath || ""),
     targetDeviceId: String(targetDeviceId || ""),
     targetDeviceName: String(targetDeviceName || ""),
     targetFolderName: sanitizeFolderName(targetFolderName || mirrorName),

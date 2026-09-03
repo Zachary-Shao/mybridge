@@ -114,6 +114,35 @@ export class MyBridgeHttpServer {
         sendJson(response, 200, await this.agent.updateSettings(body));
         return;
       }
+      if (request.method === "POST" && requestUrl.pathname === "/api/mirrors") {
+        const body = await readJson(request);
+        sendJson(response, 200, await this.agent.addMirror(body));
+        return;
+      }
+      if (request.method === "POST" && requestUrl.pathname === "/api/mirrors/accept") {
+        const body = await readJson(request);
+        sendJson(response, 200, await this.agent.acceptMirror(body, {
+          token: request.headers["x-mybridge-token"],
+          sourceId: request.headers["x-mybridge-source-id"]
+        }));
+        return;
+      }
+      if (request.method === "POST" && requestUrl.pathname === "/api/mirrors/remove") {
+        const body = await readJson(request);
+        sendJson(response, 200, await this.agent.removeMirror(body.mirrorId, { notifyRemote: false }));
+        return;
+      }
+      const mirrorAction = request.method === "POST" && requestUrl.pathname.match(/^\/api\/mirrors\/([^/]+)\/(pause|resume|remove)$/);
+      if (mirrorAction) {
+        const mirrorId = decodeURIComponent(mirrorAction[1]);
+        const action = mirrorAction[2];
+        if (action === "remove") {
+          sendJson(response, 200, await this.agent.removeMirror(mirrorId));
+        } else {
+          sendJson(response, 200, await this.agent.setMirrorPaused(mirrorId, action === "pause"));
+        }
+        return;
+      }
       if (request.method === "POST" && requestUrl.pathname === "/api/pair") {
         const body = await readJson(request);
         sendJson(response, 200, await this.agent.pairWithRemote(body));
@@ -128,8 +157,13 @@ export class MyBridgeHttpServer {
         sendJson(response, 200, await this.agent.resync());
         return;
       }
+      if (request.method === "POST" && requestUrl.pathname === "/api/pause") {
+        const body = await readJson(request);
+        sendJson(response, 200, { ok: true, paused: await this.agent.setPaused(body.paused) });
+        return;
+      }
       if (request.method === "PUT" && requestUrl.pathname === "/api/files") {
-        await this.receiver.receive(request, response, requestUrl.searchParams.get("path"));
+        await this.receiver.receive(request, response, requestUrl.searchParams.get("path"), requestUrl.searchParams.get("mirrorId"));
         return;
       }
       if (request.method === "GET") {
