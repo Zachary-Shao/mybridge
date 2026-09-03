@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { createMirror, normalizeIgnoreRules, sanitizeFolderName } from "./mirror-utils.js";
 
 function platformDataDir() {
   if (process.env.MYBRIDGE_DATA_DIR) {
@@ -25,13 +26,16 @@ function validPort(value, fallback, { allowZero = false } = {}) {
   return Number.isInteger(port) && port >= minimum && port <= 65535 ? port : fallback;
 }
 
-function defaultConfig({ deviceName, httpPort, udpPort }) {
+function defaultConfig({ deviceName, httpPort, udpPort, mybridgeRoot }) {
   return {
-    version: 1,
+    version: 3,
     deviceId: randomUUID(),
     deviceName: deviceName || os.hostname(),
     httpPort: validPort(httpPort ?? 39875, 39875, { allowZero: true }),
     udpPort: validPort(udpPort ?? 39876, 39876),
+    mybridgeRoot: path.resolve(mybridgeRoot || path.join(os.homedir(), "MyBridge")),
+    ignoreRules: normalizeIgnoreRules(),
+    mirrors: [],
     sourceFolder: "",
     destinationFolder: "",
     pairedDevice: null,
@@ -40,15 +44,29 @@ function defaultConfig({ deviceName, httpPort, udpPort }) {
   };
 }
 
+function normalizeMirror(raw) {
+  if (!raw || typeof raw !== "object" || !raw.sourcePath) return null;
+  const mirror = createMirror(raw);
+  return {
+    ...mirror,
+    name: String(raw.name || mirror.name).trim() || mirror.name,
+    targetFolderName: sanitizeFolderName(raw.targetFolderName || mirror.targetFolderName),
+    enabled: raw.enabled !== false
+  };
+}
+
 function normalizeConfig(raw, defaults) {
   return {
     ...defaults,
     ...raw,
-    version: 1,
+    version: 3,
     deviceId: raw?.deviceId || defaults.deviceId,
     deviceName: raw?.deviceName || defaults.deviceName,
     httpPort: validPort(raw?.httpPort ?? defaults.httpPort, defaults.httpPort, { allowZero: true }),
     udpPort: validPort(raw?.udpPort ?? defaults.udpPort, defaults.udpPort),
+    mybridgeRoot: raw?.mybridgeRoot ? path.resolve(String(raw.mybridgeRoot)) : defaults.mybridgeRoot,
+    ignoreRules: normalizeIgnoreRules(raw?.ignoreRules),
+    mirrors: Array.isArray(raw?.mirrors) ? raw.mirrors.map(normalizeMirror).filter(Boolean) : [],
     sourceFolder: typeof raw?.sourceFolder === "string" ? raw.sourceFolder : "",
     destinationFolder: typeof raw?.destinationFolder === "string" ? raw.destinationFolder : "",
     pairedDevice: raw?.pairedDevice || null,

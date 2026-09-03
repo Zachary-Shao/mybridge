@@ -13,6 +13,9 @@ test("creates and reloads a local JSON config", () => {
   assert.equal(config.deviceName, "Test Mac");
   assert.equal(config.httpPort, 40001);
   assert.ok(config.deviceId);
+  assert.ok(Array.isArray(config.mirrors));
+  assert.ok(config.ignoreRules.includes("node_modules"));
+  assert.ok(config.mybridgeRoot);
   assert.ok(fs.existsSync(path.join(dataDir, "config.json")));
 
   first.update({ sourceFolder: "/tmp/source" });
