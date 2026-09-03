@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { normalizeRelativePath, resolveInside, toRelativePath } from "../src/path-utils.js";
 
 test("normalizes nested paths into portable wire paths", () => {
@@ -15,5 +16,6 @@ test("rejects absolute and traversal paths", () => {
 });
 
 test("resolves safe paths below the configured root", () => {
-  assert.equal(resolveInside("/tmp/destination", "nested/file.txt"), "/tmp/destination/nested/file.txt");
+  const root = path.resolve("tmp", "destination");
+  assert.equal(resolveInside(root, "nested/file.txt"), path.join(root, "nested", "file.txt"));
 });

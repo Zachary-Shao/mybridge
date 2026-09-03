@@ -3,7 +3,7 @@ import dgram from "node:dgram";
 const ANNOUNCE_TYPE = "mybridge-discovery";
 
 export class Discovery {
-  constructor({ port, getHttpPort, deviceId, getDeviceName, getRole, onDevice, intervalMs = 2_000 }) {
+  constructor({ port, getHttpPort, deviceId, getDeviceName, getRole, onDevice, intervalMs = 2_000, broadcastAddress = "255.255.255.255" }) {
     this.port = Number(port) || 39876;
     this.getHttpPort = getHttpPort;
     this.deviceId = deviceId;
@@ -11,6 +11,7 @@ export class Discovery {
     this.getRole = getRole;
     this.onDevice = onDevice;
     this.intervalMs = intervalMs;
+    this.broadcastAddress = broadcastAddress;
     this.socket = null;
     this.timer = null;
   }
@@ -74,7 +75,7 @@ export class Discovery {
       role: this.getRole(),
       at: Date.now()
     }));
-    this.socket.send(packet, 0, packet.length, this.port, "255.255.255.255", () => {});
+    this.socket.send(packet, 0, packet.length, this.port, this.broadcastAddress, () => {});
   }
 
   async stop() {

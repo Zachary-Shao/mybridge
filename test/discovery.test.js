@@ -12,6 +12,7 @@ test("discovery announces another local agent", async () => {
     getDeviceName: () => "Windows test",
     getRole: () => "source",
     intervalMs: 50,
+    broadcastAddress: "127.0.0.1",
     onDevice: (device) => discovered.push(device)
   });
   const second = new Discovery({
@@ -20,7 +21,8 @@ test("discovery announces another local agent", async () => {
     deviceId: "device-b",
     getDeviceName: () => "Mac test",
     getRole: () => "destination",
-    intervalMs: 50
+    intervalMs: 50,
+    broadcastAddress: "127.0.0.1"
   });
 
   await first.start();
