@@ -17,7 +17,7 @@
           <span>MyBridge</span>
         </a>
         <div class="topbar-meta">
-          <span class="topbar-label">PRIVATE LAN / V0.1</span>
+          <span class="topbar-label">PRIVATE LAN / V0.2</span>
           <span class="topbar-divider"></span>
           <span id="clock" class="mono">--:--:--</span>
         </div>
@@ -35,8 +35,9 @@
             <div class="card-kicker">BRIDGE SIGNAL <span class="pulse-dot"></span></div>
             <div id="connection-status" class="connection-status">正在读取设备状态</div>
             <div id="connection-device" class="connection-device">—</div>
+            <div id="sync-status-label" class="sync-status-label">WAITING</div>
             <div class="connection-line"><span></span><span></span><span></span><span></span><b></b></div>
-            <div class="connection-footer"><span id="connection-role">UNCONFIGURED</span><span id="connection-port" class="mono">PORT —</span></div>
+            <div class="connection-footer"><span id="connection-role">UNCONFIGURED</span><button id="pause-button" class="pause-button" type="button">暂停同步</button></div>
           </article>
         </section>
 
@@ -61,8 +62,9 @@
             <div class="panel-head"><div><span class="panel-index">LOCAL SETUP</span><h3>告诉 MyBridge 去哪里工作</h3></div><span class="gear" aria-hidden="true">✳</span></div>
             <form id="settings-form">
               <label>设备名称<input id="device-name" name="deviceName" autocomplete="off" placeholder="例如：Zachary 的 Windows"></label>
-              <label>Source Folder <span class="label-hint">Windows</span><input id="source-folder" name="sourceFolder" autocomplete="off" placeholder="C:\\Users\\你\\通达信\\data"></label>
-              <label>Destination Folder <span class="label-hint">Mac</span><input id="destination-folder" name="destinationFolder" autocomplete="off" placeholder="/Users/你/Projects/market-data"></label>
+              <label>Source Folder <span class="label-hint">Windows</span><div class="folder-input"><input id="source-folder" name="sourceFolder" autocomplete="off" placeholder="C:\\Users\\你\\通达信\\data"><button id="pick-source" class="folder-button native-only" type="button">选择</button></div></label>
+              <label>Destination Folder <span class="label-hint">Mac</span><div class="folder-input"><input id="destination-folder" name="destinationFolder" autocomplete="off" placeholder="/Users/你/Projects/market-data"><button id="pick-destination" class="folder-button native-only" type="button">选择</button></div></label>
+              <label id="auto-launch-row" class="toggle-row native-only"><input id="auto-launch" type="checkbox"><span><strong>开机后自动运行</strong><small>关闭窗口后，MyBridge 仍会在后台保持同步</small></span><i></i></label>
               <div class="form-actions"><button class="button button-primary" type="submit">保存本机配置 <span>↗</span></button><span id="settings-message" class="form-message" role="status"></span></div>
             </form>
           </article>
@@ -70,10 +72,14 @@
           <article class="panel devices-panel">
             <div class="panel-head"><div><span class="panel-index">LAN RADAR</span><h3>附近的设备</h3></div><button id="refresh-button" class="icon-button" type="button" aria-label="刷新设备">↻</button></div>
             <div id="device-list" class="device-list"><div class="empty-state"><span class="empty-orbit"></span><p>正在扫描局域网设备…</p><small>两台电脑需要连接到同一个网络</small></div></div>
-            <div class="manual-pair">
-              <div class="manual-label">无法看到设备？手动输入地址</div>
-              <div class="manual-row"><input id="manual-address" placeholder="http://192.168.1.20:39875" autocomplete="off"><button id="manual-pair-button" class="button button-secondary" type="button">Pair</button></div>
-            </div>
+            <details class="advanced-settings">
+              <summary>高级设置 <span>仅在自动发现失败时使用</span></summary>
+              <div class="manual-pair">
+                <div class="manual-label">手动连接另一台设备</div>
+                <div class="manual-row"><input id="manual-address" placeholder="http://192.168.1.20:39875" autocomplete="off"><button id="manual-pair-button" class="button button-secondary" type="button">连接</button></div>
+              </div>
+              <div class="advanced-note">当前设备的本地服务端口：<span id="advanced-port" class="mono">—</span></div>
+            </details>
           </article>
         </section>
 

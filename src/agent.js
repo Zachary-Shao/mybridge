@@ -71,13 +71,15 @@ export class Agent {
       onActivity: (event) => this.recordActivity(event)
     });
     this.httpServer = new MyBridgeHttpServer({ agent: this, receiver: this.receiver });
+    this.recoveryTimer = null;
+    this.recoveryInFlight = false;
     this.discovery = new Discovery({
       port: this.store.get().udpPort,
       getHttpPort: () => this.port,
       deviceId: this.store.get().deviceId,
       getDeviceName: () => this.store.get().deviceName,
       getRole: () => this.getRole(),
-      onDevice: (device) => this.runtime.rememberDevice(device)
+      onDevice: (device) => this.handleDiscoveredDevice(device)
     });
     this.enableDiscovery = options.enableDiscovery !== false;
   }
@@ -92,14 +94,23 @@ export class Agent {
   async start() {
     this.port = await this.httpServer.start();
     if (this.store.get().httpPort !== this.port) this.store.update({ httpPort: this.port });
-    if (this.enableDiscovery) await this.discovery.start();
+    if (this.enableDiscovery) {
+      try {
+        await this.discovery.start();
+      } catch (error) {
+        this.runtime.setSyncStatus("waiting", { error: `局域网发现暂不可用：${error.message}` });
+      }
+    }
     if (this.store.get().sourceFolder) {
       await this.syncEngine.start({ initialScan: Boolean(this.store.get().pairedDevice) });
     }
+    if (!this.store.get().sourceFolder && !this.store.get().destinationFolder) this.runtime.setSyncStatus("waiting");
     return this;
   }
 
   async stop() {
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = null;
     await this.syncEngine.stop();
     await this.discovery.stop();
     await this.httpServer.stop();
@@ -109,8 +120,53 @@ export class Agent {
     return this.runtime.publicState(this.store.get());
   }
 
+  isPaused() {
+    return this.syncEngine.paused;
+  }
+
+  async setPaused(paused) {
+    await this.syncEngine.setPaused(paused);
+    this.runtime.setPaused(paused);
+    return this.isPaused();
+  }
+
   recordActivity(event) {
     this.store.addActivity(event);
+  }
+
+  handleDiscoveredDevice(device) {
+    const wasOnline = this.runtime.isOnline(device.deviceId);
+    this.runtime.rememberDevice(device);
+    const pairedDevice = this.store.get().pairedDevice;
+    if (!pairedDevice || pairedDevice.deviceId !== device.deviceId) return;
+
+    if (pairedDevice.baseUrl !== device.baseUrl) {
+      this.store.update({ pairedDevice: { ...pairedDevice, baseUrl: device.baseUrl } });
+    }
+    if (!wasOnline && this.store.get().sourceFolder && !this.isPaused()) this.scheduleRecovery();
+  }
+
+  scheduleRecovery() {
+    if (this.recoveryTimer || this.recoveryInFlight) return;
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      void this.recoverSync();
+    }, 250);
+  }
+
+  async recoverSync() {
+    if (this.recoveryInFlight || this.isPaused() || !this.store.get().sourceFolder) return;
+    this.recoveryInFlight = true;
+    try {
+      await this.syncEngine.syncAll();
+    } finally {
+      this.recoveryInFlight = false;
+    }
+  }
+
+  async handleResume() {
+    this.runtime.setSyncStatus("waiting");
+    await this.recoverSync();
   }
 
   async updateSettings(payload = {}) {

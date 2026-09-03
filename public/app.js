@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 let currentState = null;
 let toastTimer = null;
+let lastErrorToast = "";
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -15,6 +16,16 @@ function showToast(message, type = "info") {
   toast.classList.add("is-visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 3200);
+}
+
+function friendlyError(error = "") {
+  const text = String(error);
+  if (text.includes("No paired destination")) return "还没有连接目标设备";
+  if (text.includes("timed out") || text.includes("ECONNREFUSED") || text.includes("fetch failed")) return "对方暂时离线，网络恢复后会自动重试";
+  if (text.includes("Destination Folder")) return "请先在 Mac 上选择 Destination Folder";
+  if (text.includes("Source Folder")) return "请先选择一个存在的 Source Folder";
+  if (text.includes("Pairing token")) return "配对信息已失效，请重新连接设备";
+  return text;
 }
 
 async function api(path, options = {}) {
@@ -47,7 +58,7 @@ function renderConnection(state) {
     device.textContent = "先在下方选择一台设备";
   }
   $("#connection-role").textContent = state.device.role.toUpperCase();
-  $("#connection-port").textContent = `PORT ${state.device.httpPort}`;
+  $("#advanced-port").textContent = state.device.httpPort;
 }
 
 function renderPaths(state) {
@@ -62,9 +73,9 @@ function renderPaths(state) {
 }
 
 function renderSettings(state) {
-  $("#device-name").value = state.device.name || "";
-  $("#source-folder").value = state.config.sourceFolder || "";
-  $("#destination-folder").value = state.config.destinationFolder || "";
+  if (document.activeElement !== $("#device-name")) $("#device-name").value = state.device.name || "";
+  if (document.activeElement !== $("#source-folder")) $("#source-folder").value = state.config.sourceFolder || "";
+  if (document.activeElement !== $("#destination-folder")) $("#destination-folder").value = state.config.destinationFolder || "";
 }
 
 function renderDevices(state) {
@@ -78,8 +89,8 @@ function renderDevices(state) {
   list.innerHTML = devices.map((device) => `
     <div class="device-row ${device.deviceId === pairedId ? "is-paired" : ""}">
       <span class="device-signal ${device.isOnline ? "is-online" : ""}"></span>
-      <div class="device-info"><strong>${escapeHtml(device.deviceName)}</strong><span>${escapeHtml(device.role)} · ${escapeHtml(device.baseUrl)}</span></div>
-      <button class="button button-small pair-button" data-url="${escapeHtml(device.baseUrl)}" data-id="${escapeHtml(device.deviceId)}" data-name="${escapeHtml(device.deviceName)}" type="button">${device.deviceId === pairedId ? "已配对" : "Pair"}</button>
+      <div class="device-info"><strong>${escapeHtml(device.deviceName)}</strong><span>${escapeHtml(device.role === "destination" ? "Mac 目标设备" : device.role === "source" ? "Windows 源设备" : "MyBridge 设备")}</span></div>
+      <button class="button button-small pair-button" data-url="${escapeHtml(device.baseUrl)}" data-id="${escapeHtml(device.deviceId)}" data-name="${escapeHtml(device.deviceName)}" type="button">${device.deviceId === pairedId ? "已配对" : "连接"}</button>
     </div>`).join("");
   list.querySelectorAll(".pair-button").forEach((button) => button.addEventListener("click", () => pairDevice(button.dataset)));
 }
@@ -108,8 +119,15 @@ function renderSync(state) {
   const sync = state.sync;
   const card = $("#connection-card");
   card.dataset.sync = sync.status;
-  if (sync.status === "error" && sync.lastError) {
-    showToast(sync.lastError, "error");
+  const labels = { waiting: "WAITING", syncing: "SYNCING", success: "SYNCED", error: "FAILED", paused: "PAUSED", idle: "WAITING" };
+  const descriptions = { waiting: "等待开始", syncing: "正在同步", success: "最近已同步", error: "同步失败", paused: "同步已暂停", idle: "等待开始" };
+  $("#sync-status-label").textContent = labels[sync.status] || "WAITING";
+  $("#pause-button").textContent = sync.paused ? "恢复同步" : "暂停同步";
+  $("#pause-button").title = descriptions[sync.status] || "同步控制";
+  $("#pause-button").disabled = !state.config.sourceFolder;
+  if (sync.status === "error" && sync.lastError && sync.lastError !== lastErrorToast) {
+    lastErrorToast = sync.lastError;
+    showToast(friendlyError(sync.lastError), "error");
   }
 }
 
@@ -127,7 +145,7 @@ async function refresh(showError = false) {
   try {
     render(await api(`/api/state?at=${Date.now()}`, { headers: {} }));
   } catch (error) {
-    if (showError) showToast(error.message, "error");
+    if (showError) showToast(friendlyError(error.message), "error");
   }
 }
 
@@ -145,12 +163,13 @@ async function saveSettings(event) {
         destinationFolder: $("#destination-folder").value
       })
     });
+    if (window.mybridge?.setAutoLaunch && $("#auto-launch")) await window.mybridge.setAutoLaunch($("#auto-launch").checked);
     $("#settings-message").textContent = "已保存";
     showToast("本机配置已保存", "success");
     await refresh();
   } catch (error) {
     $("#settings-message").textContent = error.message;
-    showToast(error.message, "error");
+    showToast(friendlyError(error.message), "error");
   } finally {
     button.disabled = false;
   }
@@ -163,7 +182,7 @@ async function pairDevice(data) {
     showToast(`已与 ${data.name} 配对`, "success");
     await refresh();
   } catch (error) {
-    showToast(`配对失败：${error.message}`, "error");
+    showToast(`连接失败：${friendlyError(error.message)}`, "error");
   }
 }
 
@@ -171,6 +190,24 @@ async function manualPair() {
   const url = $("#manual-address").value.trim();
   if (!url) return showToast("请输入对方的 http 地址", "error");
   await pairDevice({ url, name: "手动添加的设备" });
+}
+
+async function pickFolder(inputId) {
+  if (!window.mybridge?.pickFolder) return showToast("请直接在输入框填写文件夹路径", "info");
+  const input = $(inputId);
+  const folder = await window.mybridge.pickFolder(input.value);
+  if (folder) input.value = folder;
+}
+
+async function togglePause() {
+  const paused = !currentState?.sync?.paused;
+  try {
+    if (window.mybridge?.setPaused) await window.mybridge.setPaused(paused);
+    else await api("/api/pause", { method: "POST", body: JSON.stringify({ paused }) });
+    await refresh();
+  } catch (error) {
+    showToast(friendlyError(error.message), "error");
+  }
 }
 
 async function resync() {
@@ -181,7 +218,7 @@ async function resync() {
     showToast("全量扫描已完成", "success");
     await refresh();
   } catch (error) {
-    showToast(error.message, "error");
+    showToast(friendlyError(error.message), "error");
   } finally {
     button.disabled = false;
   }
@@ -191,6 +228,11 @@ $("#settings-form").addEventListener("submit", saveSettings);
 $("#manual-pair-button").addEventListener("click", manualPair);
 $("#refresh-button").addEventListener("click", () => refresh(true));
 $("#resync-button").addEventListener("click", resync);
+$("#pick-source").addEventListener("click", () => pickFolder("#source-folder"));
+$("#pick-destination").addEventListener("click", () => pickFolder("#destination-folder"));
+$("#pause-button").addEventListener("click", togglePause);
+if (!window.mybridge) document.querySelectorAll(".native-only").forEach((element) => element.classList.add("is-hidden"));
+if (window.mybridge?.getAutoLaunch) window.mybridge.getAutoLaunch().then((enabled) => { $("#auto-launch").checked = Boolean(enabled); });
 setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString("zh-CN", { hour12: false }); }, 1000);
 setInterval(() => refresh(false), 2500);
 refresh(true);

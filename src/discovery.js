@@ -40,6 +40,13 @@ export class Discovery {
     await new Promise((resolve, reject) => {
       const onError = (error) => {
         this.socket?.off("listening", onListening);
+        const failedSocket = this.socket;
+        this.socket = null;
+        try {
+          failedSocket?.close();
+        } catch {
+          // The socket may never have reached the bound state.
+        }
         reject(error);
       };
       const onListening = () => {

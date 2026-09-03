@@ -2,7 +2,8 @@ const ONLINE_WINDOW_MS = 6_000;
 
 export class RuntimeState {
   constructor() {
-    this.syncStatus = "idle";
+    this.syncStatus = "waiting";
+    this.paused = false;
     this.currentFile = null;
     this.lastError = null;
     this.lastSyncAt = null;
@@ -22,8 +23,19 @@ export class RuntimeState {
     }
   }
 
+  setPaused(paused) {
+    this.paused = Boolean(paused);
+    if (this.paused) this.syncStatus = "paused";
+    else if (this.syncStatus === "paused") this.syncStatus = "waiting";
+  }
+
   rememberDevice(device) {
     this.devices.set(device.deviceId, { ...device, lastSeen: Date.now() });
+  }
+
+  isOnline(deviceId) {
+    const device = this.devices.get(deviceId);
+    return Boolean(device && Date.now() - device.lastSeen < ONLINE_WINDOW_MS);
   }
 
   listDevices() {
@@ -67,6 +79,7 @@ export class RuntimeState {
       },
       sync: {
         status: this.syncStatus,
+        paused: this.paused,
         currentFile: this.currentFile,
         lastError: this.lastError,
         lastSyncAt: this.lastSyncAt

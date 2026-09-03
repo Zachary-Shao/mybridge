@@ -89,6 +89,7 @@ export class SyncEngine {
     this.timers = new Map();
     this.queue = [];
     this.running = false;
+    this.paused = false;
   }
 
   async start({ initialScan = true } = {}) {
@@ -110,7 +111,7 @@ export class SyncEngine {
     this.watcher.on("error", (error) => {
       this.onStatus?.({ status: "error", error: error.message });
     });
-    if (initialScan) await this.syncAll();
+    if (initialScan && !this.paused) await this.syncAll();
   }
 
   async stop() {
@@ -125,6 +126,7 @@ export class SyncEngine {
   }
 
   async syncAll() {
+    if (this.paused) return;
     const sourceFolder = this.getSourceFolder();
     if (!sourceFolder) return;
     const files = await listFiles(sourceFolder);
@@ -134,6 +136,7 @@ export class SyncEngine {
   }
 
   enqueue(relativePath) {
+    if (this.paused) return;
     const normalized = normalizeRelativePath(relativePath);
     const existing = this.timers.get(normalized);
     if (existing) clearTimeout(existing);
@@ -149,12 +152,30 @@ export class SyncEngine {
     if (this.running) return;
     this.running = true;
     try {
+      if (this.paused) {
+        this.queue = [];
+        return;
+      }
       while (this.queue.length > 0) {
         await this.syncOne(this.queue.shift());
       }
     } finally {
       this.running = false;
     }
+  }
+
+  async setPaused(paused) {
+    this.paused = Boolean(paused);
+    if (this.paused) {
+      for (const timer of this.timers.values()) clearTimeout(timer);
+      this.timers.clear();
+      this.queue = [];
+      this.onStatus?.({ status: "paused" });
+      return;
+    }
+
+    this.onStatus?.({ status: "waiting" });
+    await this.syncAll();
   }
 
   async waitForIdle() {
@@ -164,6 +185,7 @@ export class SyncEngine {
   }
 
   async syncOne(relativePath) {
+    if (this.paused) return { skipped: true };
     const sourceFolder = this.getSourceFolder();
     if (!sourceFolder) return { skipped: true };
 

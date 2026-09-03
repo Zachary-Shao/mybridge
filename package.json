@@ -1,14 +1,48 @@
 {
   "name": "mybridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "main": "src/electron-main.js",
+  "author": "MyBridge",
   "description": "A lightweight Windows to Mac LAN folder sync tool.",
   "type": "module",
   "scripts": {
     "start": "node src/cli.js",
-    "test": "node --test"
+    "test": "node --test",
+    "desktop": "electron .",
+    "desktop:mac": "electron .",
+    "dist": "electron-builder"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.mybridge.app",
+    "productName": "MyBridge",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

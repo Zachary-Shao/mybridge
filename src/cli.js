@@ -26,7 +26,7 @@ function parseArgs(argv) {
 }
 
 function showHelp() {
-  console.log(`MyBridge 0.1.0\n\nUsage:\n  npm start -- [options]\n\nOptions:\n  --name <name>          Device name shown on the LAN\n  --port <port>          Local HTTP console port (default: 39875)\n  --udp-port <port>      Discovery UDP port (default: 39876)\n  --data-dir <path>      Override local config directory\n  --no-discovery         Disable UDP discovery\n  --help                 Show this help`);
+  console.log(`MyBridge 0.2.0\n\nUsage:\n  npm start -- [options]\n\nOptions:\n  --name <name>          Device name shown on the LAN\n  --port <port>          Local HTTP console port (default: 39875)\n  --udp-port <port>      Discovery UDP port (default: 39876)\n  --data-dir <path>      Override local config directory\n  --no-discovery         Disable UDP discovery\n  --help                 Show this help`);
 }
 
 const options = parseArgs(process.argv.slice(2));
