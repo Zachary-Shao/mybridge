@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#131518">
+    <title>MyBridge / Personal File Bridge</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="MyBridge home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>MyBridge</span>
+        </a>
+        <div class="topbar-meta">
+          <span class="topbar-label">PRIVATE LAN / V0.1</span>
+          <span class="topbar-divider"></span>
+          <span id="clock" class="mono">--:--:--</span>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">PERSONAL FILE BRIDGE</div>
+            <h1>让两台电脑，<em>像同一台。</em></h1>
+            <p>Windows 发生的变化，安静地抵达 Mac。一次配好，之后只管工作。</p>
+            <div class="hero-footnote"><span class="dot dot-lime"></span> 数据只在你的局域网里流动</div>
+          </div>
+          <article id="connection-card" class="connection-card" aria-live="polite">
+            <div class="card-kicker">BRIDGE SIGNAL <span class="pulse-dot"></span></div>
+            <div id="connection-status" class="connection-status">正在读取设备状态</div>
+            <div id="connection-device" class="connection-device">—</div>
+            <div class="connection-line"><span></span><span></span><span></span><span></span><b></b></div>
+            <div class="connection-footer"><span id="connection-role">UNCONFIGURED</span><span id="connection-port" class="mono">PORT —</span></div>
+          </article>
+        </section>
+
+        <div class="section-heading"><span>01</span><h2>链路总览</h2><div></div><small>LIVE OVERVIEW</small></div>
+        <section class="overview-grid">
+          <article class="panel path-panel source-panel">
+            <div class="panel-head"><div><span class="panel-index">A / SOURCE</span><h3>Windows 文件源</h3></div><span id="source-state" class="state-badge">未配置</span></div>
+            <div class="path-display"><span class="path-icon">↗</span><span id="source-path">还没有选择 Source Folder</span></div>
+            <p class="panel-note">监听新增和更新 · 不同步删除</p>
+          </article>
+          <div class="flow-arrow" aria-hidden="true"><span>→</span><small>LAN</small></div>
+          <article class="panel path-panel destination-panel">
+            <div class="panel-head"><div><span class="panel-index">B / DESTINATION</span><h3>Mac 项目目录</h3></div><span id="destination-state" class="state-badge">未配置</span></div>
+            <div class="path-display"><span class="path-icon">↙</span><span id="destination-path">还没有选择 Destination Folder</span></div>
+            <p class="panel-note">文件完成后原子替换 · 不会留下半文件</p>
+          </article>
+        </section>
+
+        <div class="section-heading"><span>02</span><h2>设备与配置</h2><div></div><small>PAIR / CONFIGURE</small></div>
+        <section class="control-grid">
+          <article class="panel settings-panel">
+            <div class="panel-head"><div><span class="panel-index">LOCAL SETUP</span><h3>告诉 MyBridge 去哪里工作</h3></div><span class="gear" aria-hidden="true">✳</span></div>
+            <form id="settings-form">
+              <label>设备名称<input id="device-name" name="deviceName" autocomplete="off" placeholder="例如：Zachary 的 Windows"></label>
+              <label>Source Folder <span class="label-hint">Windows</span><input id="source-folder" name="sourceFolder" autocomplete="off" placeholder="C:\\Users\\你\\通达信\\data"></label>
+              <label>Destination Folder <span class="label-hint">Mac</span><input id="destination-folder" name="destinationFolder" autocomplete="off" placeholder="/Users/你/Projects/market-data"></label>
+              <div class="form-actions"><button class="button button-primary" type="submit">保存本机配置 <span>↗</span></button><span id="settings-message" class="form-message" role="status"></span></div>
+            </form>
+          </article>
+
+          <article class="panel devices-panel">
+            <div class="panel-head"><div><span class="panel-index">LAN RADAR</span><h3>附近的设备</h3></div><button id="refresh-button" class="icon-button" type="button" aria-label="刷新设备">↻</button></div>
+            <div id="device-list" class="device-list"><div class="empty-state"><span class="empty-orbit"></span><p>正在扫描局域网设备…</p><small>两台电脑需要连接到同一个网络</small></div></div>
+            <div class="manual-pair">
+              <div class="manual-label">无法看到设备？手动输入地址</div>
+              <div class="manual-row"><input id="manual-address" placeholder="http://192.168.1.20:39875" autocomplete="off"><button id="manual-pair-button" class="button button-secondary" type="button">Pair</button></div>
+            </div>
+          </article>
+        </section>
+
+        <div class="section-heading"><span>03</span><h2>最近活动</h2><div></div><button id="resync-button" class="text-button" type="button">立即重新扫描 ↗</button></div>
+        <section class="panel activity-panel">
+          <div class="activity-header"><span>状态</span><span>文件 / 事件</span><span>时间</span></div>
+          <div id="activity-list"><div class="empty-activity">完成配对后，这里会显示每一次文件抵达的记录。</div></div>
+        </section>
+      </main>
+
+      <footer class="footer"><span>MYBRIDGE / LOCAL ONLY</span><span>没有账号 · 没有云 · 只有你的两台设备</span></footer>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

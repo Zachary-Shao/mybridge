@@ -19,13 +19,19 @@ function platformDataDir() {
   return path.join(os.homedir(), ".mybridge");
 }
 
+function validPort(value, fallback, { allowZero = false } = {}) {
+  const port = Number(value);
+  const minimum = allowZero ? 0 : 1;
+  return Number.isInteger(port) && port >= minimum && port <= 65535 ? port : fallback;
+}
+
 function defaultConfig({ deviceName, httpPort, udpPort }) {
   return {
     version: 1,
     deviceId: randomUUID(),
     deviceName: deviceName || os.hostname(),
-    httpPort: Number(httpPort) || 39875,
-    udpPort: Number(udpPort) || 39876,
+    httpPort: validPort(httpPort ?? 39875, 39875, { allowZero: true }),
+    udpPort: validPort(udpPort ?? 39876, 39876),
     sourceFolder: "",
     destinationFolder: "",
     pairedDevice: null,
@@ -41,8 +47,8 @@ function normalizeConfig(raw, defaults) {
     version: 1,
     deviceId: raw?.deviceId || defaults.deviceId,
     deviceName: raw?.deviceName || defaults.deviceName,
-    httpPort: Number(raw?.httpPort) || defaults.httpPort,
-    udpPort: Number(raw?.udpPort) || defaults.udpPort,
+    httpPort: validPort(raw?.httpPort ?? defaults.httpPort, defaults.httpPort, { allowZero: true }),
+    udpPort: validPort(raw?.udpPort ?? defaults.udpPort, defaults.udpPort),
     sourceFolder: typeof raw?.sourceFolder === "string" ? raw.sourceFolder : "",
     destinationFolder: typeof raw?.destinationFolder === "string" ? raw.destinationFolder : "",
     pairedDevice: raw?.pairedDevice || null,
