@@ -4,3 +4,9 @@ node_modules/
 .mybridge/
 test/.tmp/
 release/
+.env
+.env.*
+!.env.example
+config.json
+**/config.json
+*.mybridge-part-*

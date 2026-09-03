@@ -11,7 +11,9 @@
     "test": "node scripts/run-tests.js",
     "desktop": "electron .",
     "desktop:mac": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "build:win:x64": "electron-builder --win --x64",
+    "build:mac:arm64": "electron-builder --mac --arm64"
   },
   "engines": {
     "node": ">=20"
@@ -33,16 +35,35 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"]
+      "defaultArch": "arm64",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
+      ],
+      "artifactName": "MyBridge-${version}-arm64.${ext}"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "defaultArch": "x64",
+      "artifactName": "MyBridge-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "MyBridge-${version}-x64-Setup.${ext}"
     }
   }
 }
