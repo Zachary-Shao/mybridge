@@ -1,0 +1,14 @@
+{
+  "name": "mybridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A lightweight Windows to Mac LAN folder sync tool.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
