@@ -2,18 +2,28 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import { DEFAULT_IGNORE_RULES, isIgnoredPath, normalizeIgnoreRules } from "./mirror-utils.js";
 import { normalizeRelativePath, resolveInside, toRelativePath } from "./path-utils.js";
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-async function listFiles(rootFolder) {
+async function listFiles(rootFolder, { ignoreRules = DEFAULT_IGNORE_RULES } = {}) {
   const files = [];
-  async function visit(folder) {
-    const entries = await fsp.readdir(folder, { withFileTypes: true });
+  const rules = normalizeIgnoreRules(ignoreRules);
+  async function visit(folder, relativeFolder = "") {
+    let entries;
+    try {
+      entries = await fsp.readdir(folder, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
     for (const entry of entries) {
       const fullPath = path.join(folder, entry.name);
+      const relativePath = relativeFolder ? path.posix.join(relativeFolder, entry.name) : entry.name;
+      if (isIgnoredPath(relativePath, rules)) continue;
       if (entry.isDirectory()) {
-        await visit(fullPath);
+        await visit(fullPath, relativePath);
       } else if (entry.isFile()) {
         files.push(toRelativePath(rootFolder, fullPath));
       }
@@ -23,19 +33,21 @@ async function listFiles(rootFolder) {
   return files.sort();
 }
 
-async function waitForStableFile(filePath, stabilityMs) {
-  const first = await fsp.stat(filePath);
-  await sleep(stabilityMs);
-  const second = await fsp.stat(filePath);
-  if (first.size !== second.size || first.mtimeMs !== second.mtimeMs) {
+async function waitForStableFile(filePath, stabilityMs, maxChecks = 5) {
+  let previous = await fsp.stat(filePath);
+  for (let check = 0; check < maxChecks; check += 1) {
     await sleep(stabilityMs);
+    const current = await fsp.stat(filePath);
+    if (previous.size === current.size && previous.mtimeMs === current.mtimeMs) return current;
+    previous = current;
   }
-  return fsp.stat(filePath);
+  return previous;
 }
 
-function uploadFile({ baseUrl, token, sourceDeviceId }, filePath, relativePath) {
+function uploadFile({ baseUrl, token, sourceDeviceId }, filePath, relativePath, mirror) {
   const endpoint = new URL("/api/files", baseUrl);
   endpoint.searchParams.set("path", relativePath);
+  if (mirror?.id) endpoint.searchParams.set("mirrorId", mirror.id);
 
   return new Promise((resolve, reject) => {
     const request = http.request(endpoint, {
@@ -77,19 +89,24 @@ function uploadFile({ baseUrl, token, sourceDeviceId }, filePath, relativePath) 
 }
 
 export class SyncEngine {
-  constructor({ getSourceFolder, getPairedDevice, onStatus, onActivity, transport = uploadFile, debounceMs = 250, stabilityMs = 120 }) {
+  constructor({ getSourceFolder, getPairedDevice, getMirror = () => null, getIgnoreRules = () => DEFAULT_IGNORE_RULES, onStatus, onActivity, transport = uploadFile, debounceMs = 250, stabilityMs = 120, stabilityChecks = 5 }) {
     this.getSourceFolder = getSourceFolder;
     this.getPairedDevice = getPairedDevice;
+    this.getMirror = getMirror;
+    this.getIgnoreRules = getIgnoreRules;
     this.onStatus = onStatus;
     this.onActivity = onActivity;
     this.transport = transport;
     this.debounceMs = debounceMs;
     this.stabilityMs = stabilityMs;
+    this.stabilityChecks = stabilityChecks;
     this.watcher = null;
     this.timers = new Map();
     this.queue = [];
+    this.queued = new Set();
     this.running = false;
     this.paused = false;
+    this.syncAllPromise = null;
   }
 
   async start({ initialScan = true } = {}) {
@@ -122,27 +139,58 @@ export class SyncEngine {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.queue = [];
+    this.queued.clear();
     while (this.running) await sleep(5);
   }
 
   async syncAll() {
+    if (this.syncAllPromise) return this.syncAllPromise;
+    this.syncAllPromise = this.performSyncAll();
+    try {
+      return await this.syncAllPromise;
+    } finally {
+      this.syncAllPromise = null;
+    }
+  }
+
+  async performSyncAll() {
     if (this.paused) return;
     const sourceFolder = this.getSourceFolder();
     if (!sourceFolder) return;
-    const files = await listFiles(sourceFolder);
+    const files = await listFiles(sourceFolder, { ignoreRules: this.getIgnoreRules() });
+    const mirror = this.getMirror();
+    this.onStatus?.({ mirrorId: mirror?.id, status: "syncing", total: files.length, completed: 0, pendingCount: files.length });
+    let failed = null;
+    let completed = 0;
     for (const relativePath of files) {
-      await this.syncOne(relativePath);
+      const result = await this.syncOne(relativePath);
+      if (!result.ok && !result.skipped) failed = result.error || failed;
+      completed += 1;
+      this.onStatus?.({
+        mirrorId: mirror?.id,
+        status: "syncing",
+        completed,
+        total: files.length,
+        fileCount: files.length,
+        pendingCount: files.length - completed
+      });
     }
+    if (failed) this.onStatus?.({ mirrorId: mirror?.id, status: "error", error: failed.message, pendingCount: 0 });
+    else this.onStatus?.({ mirrorId: mirror?.id, status: "success", fileCount: files.length, pendingCount: 0 });
   }
 
   enqueue(relativePath) {
     if (this.paused) return;
     const normalized = normalizeRelativePath(relativePath);
+    if (isIgnoredPath(normalized, this.getIgnoreRules())) return;
     const existing = this.timers.get(normalized);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
       this.timers.delete(normalized);
-      this.queue.push(normalized);
+      if (!this.queued.has(normalized)) {
+        this.queue.push(normalized);
+        this.queued.add(normalized);
+      }
       void this.runQueue();
     }, this.debounceMs);
     this.timers.set(normalized, timer);
@@ -157,7 +205,9 @@ export class SyncEngine {
         return;
       }
       while (this.queue.length > 0) {
-        await this.syncOne(this.queue.shift());
+        const relativePath = this.queue.shift();
+        this.queued.delete(relativePath);
+        await this.syncOne(relativePath);
       }
     } finally {
       this.running = false;
@@ -170,6 +220,7 @@ export class SyncEngine {
       for (const timer of this.timers.values()) clearTimeout(timer);
       this.timers.clear();
       this.queue = [];
+      this.queued.clear();
       this.onStatus?.({ status: "paused" });
       return;
     }
@@ -188,6 +239,7 @@ export class SyncEngine {
     if (this.paused) return { skipped: true };
     const sourceFolder = this.getSourceFolder();
     if (!sourceFolder) return { skipped: true };
+    if (isIgnoredPath(relativePath, this.getIgnoreRules())) return { skipped: true };
 
     const filePath = resolveInside(sourceFolder, relativePath);
     let stat;
@@ -207,18 +259,24 @@ export class SyncEngine {
       return { ok: false, error };
     }
 
-    this.onStatus?.({ status: "syncing", currentFile: relativePath });
+    const mirror = this.getMirror();
+    this.onStatus?.({ mirrorId: mirror?.id, status: "syncing", currentFile: relativePath, pendingCount: this.pendingCount() });
     try {
-      await waitForStableFile(filePath, this.stabilityMs);
-      await this.transport(pairedDevice, filePath, relativePath);
-      this.onStatus?.({ status: "success", currentFile: relativePath });
-      this.onActivity?.({ type: "send", status: "success", path: relativePath, direction: "out" });
+      await waitForStableFile(filePath, this.stabilityMs, this.stabilityChecks);
+      await this.transport(pairedDevice, filePath, relativePath, mirror);
+      this.onStatus?.({ mirrorId: mirror?.id, status: "success", currentFile: relativePath, pendingCount: this.pendingCount() });
+      this.onActivity?.({ type: "send", status: "success", path: relativePath, mirrorId: mirror?.id, mirrorName: mirror?.name, direction: "out" });
       return { ok: true };
     } catch (error) {
-      this.onStatus?.({ status: "error", currentFile: relativePath, error: error.message });
-      this.onActivity?.({ type: "send", status: "failed", path: relativePath, direction: "out", error: error.message });
+      if (error.code === "ENOENT") return { skipped: true };
+      this.onStatus?.({ mirrorId: mirror?.id, status: "error", currentFile: relativePath, error: error.message, pendingCount: this.pendingCount() });
+      this.onActivity?.({ type: "send", status: "failed", path: relativePath, mirrorId: mirror?.id, mirrorName: mirror?.name, direction: "out", error: error.message });
       return { ok: false, error };
     }
+  }
+
+  pendingCount() {
+    return this.queue.length + this.timers.size + (this.running ? 1 : 0);
   }
 }
 
